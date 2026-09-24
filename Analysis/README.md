@@ -8,7 +8,7 @@ Time used:
 Start 2015-01-01
 End  2026-05-01
 
-Datasets:
+## Datasets:
 
 Name Database: Glider
 Glider temperature and oxygen - CUGN Line 80
@@ -18,6 +18,9 @@ Accessed: 2026-09-19
 Save as: datasets/ventura_3D_glider_data.csv
 Cite: Rudnick, D. L., R. E. Davis, and J. T. Sherman. 2016. Spray Underwater Glider Operations. J. Atmos. Oceanic Technol. 33(6): 1113–1122. https://doi.org/10.1175/JTECH-D-15-0252.1
 Notes: oxygen (doxy) is in µmol/kg and starts in 2017. The file has an ERDDAP units row.
+
+--- 
+
 
 Name Database: chl_dineof
 Name: Dataset Title: 	Chlorophyll (Gap-filled DINEOF), NOAA S-NPP NOAA-20 VIIRS and Copernicus S-3A
@@ -29,6 +32,7 @@ Save as: chl_dineof
 Cite: National Oceanic and Atmospheric Administration, National Centers for Environmental Information. (2018). Chlorophyll (Gap-filled DINEOF), NOAA S-NPP NOAA-20 VIIRS and Copernicus S-3A.  https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPN20S3ASCIDINEOF2kmDaily.html Accessed: 2026-08-01
 Notes: Dineof estimates to what the chlorophyll numbers would have been in case there is cloud coverage.
 
+---
 
 Name: chl_erd
 Source:	Chlorophyll a, North Pacific, NOAA VIIRS, 750m resolution, 2015-present (1 Day
@@ -41,7 +45,7 @@ Composite)https://coastwatch.pfeg.noaa.gov/erddap/griddap/erdVHNchla1day.html Ac
 Notes: In addition to dineof chlorophyll, I wanted to be able to verify and estimate to how much data was observed versus predicted.
 
 
-
+--- 
 
 Name: kelp
 Source : SBC LTER: Time series of quarterly NetCDF files of kelp biomass in the canopy from Landsat 5, 7 and 8, since 1984 (ongoing)
@@ -56,7 +60,7 @@ kelp_landsat.parquet is derived, not downloaded:
   no-data values to NULL, and writes build/_cache_kelp_domain.parquet,
   which was renamed to datasets/kelp_landsat.parquet.
 
-
+---
 
 Name: pdo
 Source : NOAA, Pacific Decadal Oscillation(PDO)
@@ -66,7 +70,7 @@ Save as: pdo
 Cite: National Oceanic and Atmospheric Administration, National Centers for Environmental Information. (2018).Pacific Decadal Oscillation(PDO), https://www.ncei.noaa.gov/access/monitoring/pdo/ Accessed 2026-06-20
 Notes
 
-
+---
 
 Name: rain
 Source :  NOAA NCEI Climate Data Online — Global Historical Climatology
@@ -84,7 +88,7 @@ Cite: NOAA NCEI Climate Data Online — Global Historical Climatology
         Network-Daily (GHCN-Daily), CSV product, https://www.ncei.noaa.gov/cdo-web/search Accessed: 2026-08-11
 Notes: Land measured PRCP that is measured in
 
-
+---
 
 Name: reef
 Source : SBC LTER: Reef: Seasonal Kelp Forest Community Dynamics: biomass of kelp forest species, ongoing since 2008
@@ -104,7 +108,7 @@ California Spiny Lobster- Panulirus interruptus (another predator)
 Kelp
 easier to find through Taxon_family = Lessoniaceae: primarily focus giant kelp 
 
-
+---
 
 
 Name: sst
@@ -117,7 +121,7 @@ Cite: National Oceanic and Atmospheric Administration, National Centers for Envi
 2002-present, Daily https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.html Accessed: 2026-08-01
 Notes: Sea Surface temperature varies between season and Pacific Decal Occilator want to see the influence of the temperature on the biodiversity
 
-
+---
 
 
 Name: cuti
