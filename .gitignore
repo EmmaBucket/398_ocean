@@ -1,0 +1,15 @@
+# ---- Data: ~8 GB, far over GitHub's 100 MB file limit ----
+# Download sources and citations for every file are in Analysis/README.
+datasets/
+
+# ---- DuckDB: rebuilt from ocean.sql, so never commit it ----
+*.duckdb
+*.duckdb.wal
+
+# ---- Python / Jupyter ----
+__pycache__/
+.ipynb_checkpoints/
+
+# ---- macOS / editor ----
+.DS_Store
+.vscode/

@@ -1,0 +1,129 @@
+Datasets explained and sources cited: 
+
+Coordinates used for erddap datasets: 
+Lat: 33.69 , 34.51
+Longitude: -120.52 , -118.98 
+
+Time used: 
+Start 2015-01-01
+End  2026-05-01
+
+Datasets:
+
+Name Database: Glider
+Glider temperature and oxygen - CUGN Line 80
+Source: California Underwater Glider Network, Scripps Institution of Oceanography
+Download: (the link above)
+Accessed: 2026-09-19
+Save as: datasets/ventura_3D_glider_data.csv
+Cite: Rudnick, D. L., R. E. Davis, and J. T. Sherman. 2016. Spray Underwater Glider Operations. J. Atmos. Oceanic Technol. 33(6): 1113–1122. https://doi.org/10.1175/JTECH-D-15-0252.1
+Notes: oxygen (doxy) is in µmol/kg and starts in 2017. The file has an ERDDAP units row.
+
+Name Database: chl_dineof
+Name: Dataset Title: 	Chlorophyll (Gap-filled DINEOF), NOAA S-NPP NOAA-20 VIIRS and Copernicus S-3A
+OLCI, Science Quality, Global 2km, 2018-recent, Daily  
+Source : https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPN20S3ASCIDINEOF2kmDaily.html
+Download: link above provides
+Accessed: 2026-08-01
+Save as: chl_dineof
+Cite: National Oceanic and Atmospheric Administration, National Centers for Environmental Information. (2018). Chlorophyll (Gap-filled DINEOF), NOAA S-NPP NOAA-20 VIIRS and Copernicus S-3A.  https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPN20S3ASCIDINEOF2kmDaily.html Accessed: 2026-08-01
+Notes: Dineof estimates to what the chlorophyll numbers would have been in case there is cloud coverage.
+
+
+Name: chl_erd
+Source:	Chlorophyll a, North Pacific, NOAA VIIRS, 750m resolution, 2015-present (1 Day
+Composite) 
+Download: https://coastwatch.pfeg.noaa.gov/erddap/griddap/erdVHNchla1day.html
+Accessed: 2026-07-01
+Save as: 
+Cite: National Oceanic and Atmospheric Administration, National Centers for Environmental Information. (2018). Chlorophyll a, North Pacific, NOAA VIIRS, 750m resolution, 2015-present (1 Day
+Composite)https://coastwatch.pfeg.noaa.gov/erddap/griddap/erdVHNchla1day.html Accessed: 2026-07-01
+Notes: In addition to dineof chlorophyll, I wanted to be able to verify and estimate to how much data was observed versus predicted.
+
+
+
+
+Name: kelp
+Source : SBC LTER: Time series of quarterly NetCDF files of kelp biomass in the canopy from Landsat 5, 7 and 8, since 1984 (ongoing)
+Download:https://doi.org/10.6073/pasta/8d67f78530eadd77aefd85e66f5643de
+Accessed: 2026-09-01
+Save as: kelp
+Cite: Bell, T., K. Cavanaugh, and D. Siegel. 2026. SBC LTER: Time series of quarterly NetCDF files of kelp biomass in the canopy from Landsat 5, 7 and 8, since 1984 (ongoing) ver 34. Environmental Data Initiative. https://doi.org/10.6073/pasta/8d67f78530eadd77aefd85e66f5643de (Accessed 2026-09-01).
+Notes: reviews the number of kelp biomass in canopy.
+kelp_landsat.parquet is derived, not downloaded:
+  scripts/step9_kelp.py reads LandsatKelpBiomass_2026_Q2_withmetadata.nc,
+  keeps the 111,222 pixels inside the study box, converts the -1
+  no-data values to NULL, and writes build/_cache_kelp_domain.parquet,
+  which was renamed to datasets/kelp_landsat.parquet.
+
+
+
+Name: pdo
+Source : NOAA, Pacific Decadal Oscillation(PDO)
+Download:https://www.ncei.noaa.gov/pub/data/cmb/ersst/v5/v6/index/ersst.v6.pdo.dat
+Accessed: 026-06-20
+Save as: pdo
+Cite: National Oceanic and Atmospheric Administration, National Centers for Environmental Information. (2018).Pacific Decadal Oscillation(PDO), https://www.ncei.noaa.gov/access/monitoring/pdo/ Accessed 2026-06-20
+Notes
+
+
+
+Name: rain
+Source :  NOAA NCEI Climate Data Online — Global Historical Climatology
+        Network-Daily (GHCN-Daily), CSV product
+Download:https://www.ncei.noaa.gov/cdo-web/search  (two separate orders)
+     Order 1 — FIPS:06111 (Ventura County), 2014-01-01 to 2026-05-31
+            Types: AWND DAPR MDPR PRCP WT01 WT02 WT03 WT07 WT08
+            Saved as: datasets/land_weather_Ventura.csv
+     Order 2 — FIPS:06083 (Santa Barbara County), 2014-01-01 to 2026-06-14
+            Types: MXPN MNPN EVAP MDPR DAPR PRCP SNWD SNOW WESD WESF
+            Saved as: datasets/land_weather_SB.csv
+Accessed: 2026-08-11
+Save as: rain 
+Cite: NOAA NCEI Climate Data Online — Global Historical Climatology
+        Network-Daily (GHCN-Daily), CSV product, https://www.ncei.noaa.gov/cdo-web/search Accessed: 2026-08-11
+Notes: Land measured PRCP that is measured in
+
+
+
+Name: reef
+Source : SBC LTER: Reef: Seasonal Kelp Forest Community Dynamics: biomass of kelp forest species, ongoing since 2008
+Download: https://portal.edirepository.org/nis/mapbrowse?packageid=knb-lter-sbc.182.3
+Accessed: 2026-09-01
+file name Saved as: ../datasets/LandsatKelpBiomass_2026_Q2_withmetadata.nc
+Cite: Reed, D. and R. Miller. 2026. SBC LTER: Reef: Seasonal Kelp Forest Community Dynamics: biomass of kelp forest species, ongoing since 2008 ver 3. Environmental Data Initiative. https://doi.org/10.6073/pasta/ec39d4b993d15f127e4ab050705fed2e (Accessed 2026-09-01).
+Notes: 
+Sea urchins
+Purple Urchin Scientific name: Strongylocentrotus purpuratus
+Red Urchin - Mesocentrotus franciscanus
+Crowned Sea Urchin - Centrostephanus coronatus
+White Sea Urchin : Lytechinus pictus
+Predators
+Sunflower Sea Star - Pycnopodia helianthoides (predator of sea urchin with illness)
+California Spiny Lobster- Panulirus interruptus (another predator)
+Kelp
+easier to find through Taxon_family = Lessoniaceae: primarily focus giant kelp 
+
+
+
+
+Name: sst
+Source Multi-scale Ultra-high Resolution (MUR) SST Analysis fv04.1, Global, 0.01°,
+2002-present, Daily
+Download:https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.html
+Accessed: 2026-08-01
+File Saved as: datasets/SST_MUR_*.csv
+Cite: National Oceanic and Atmospheric Administration, National Centers for Environmental Information. (2018). Multi-scale Ultra-high Resolution (MUR) SST Analysis fv04.1, Global, 0.01°,
+2002-present, Daily https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.html Accessed: 2026-08-01
+Notes: Sea Surface temperature varies between season and Pacific Decal Occilator want to see the influence of the temperature on the biodiversity
+
+
+
+
+Name: cuti
+Source : Coastal Upwelling Transport Index (CUTI), Daily
+Download:https://oceanview.pfeg.noaa.gov/erddap/griddap/erdCUTIdaily.html
+Accessed: 2026-08-16
+Save as: cuti
+Cite: Source: National Oceanic and Atmospheric Administration, National Centers for Environmental Information. (2018). Coastal Upwelling Transport Index (CUTI), Daily. https://oceanview.pfeg.noaa.gov/erddap/griddap/erdCUTIdaily.html Accessed: 2026-08-16
+Notes: Coastal upwelling transport index with units m2 s-1.
