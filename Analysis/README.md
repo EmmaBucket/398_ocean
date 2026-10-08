@@ -144,3 +144,18 @@ Accessed: 2026-08-16<br>
 Save as: cuti<br>
 Cite: Source: National Oceanic and Atmospheric Administration, National Centers for Environmental Information. (2018). Coastal Upwelling Transport Index (CUTI), Daily. https://oceanview.pfeg.noaa.gov/erddap/griddap/erdCUTIdaily.html Accessed: 2026-08-16<br>
 Notes: Coastal upwelling transport index with units m2 s-1.<br>
+
+
+---
+### Photosynthesis
+Name: photosynthesis<br>
+source: KdPAR, NOAA S-NPP VIIRS, Science Quality, Global 4km, Level 3, 2012-present,
+Monthly<br>
+timeline: 2012- 2026<br>
+download https://coastwatch.pfeg.noaa.gov/erddap/griddap/nesdisVHNSQkdparMonthly.html<br>
+Accessed: 2026-10-08<br>
+Cite  NOAA CoastWatch Central(2017) KdPAR, NOAA S-NPP VIIRS, Science Quality, Global 4km, Level 3, 2012-present,
+Monthly https://coastwatch.pfeg.noaa.gov/erddap/griddap/nesdisVHNSQkdparMonthly.html
+Accessed: 2026-10-08<br>
+Son, S. and M. Wang (2015). Diffuse attenuation coefficient of the photosynthetically available radiation Kd(PAR) for global open ocean and coastal waters. Remote Sensing of Environment, 159, 250–258.
+Information: Looks at how much light is penetrating the ocean is useful for looking at kelp and chloropyll as they are dependent on light distribution. Higher KdPAR means less light penetrating
