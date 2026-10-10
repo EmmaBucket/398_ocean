@@ -159,3 +159,17 @@ Monthly https://coastwatch.pfeg.noaa.gov/erddap/griddap/nesdisVHNSQkdparMonthly.
 Accessed: 2026-10-08<br>
 Son, S. and M. Wang (2015). Diffuse attenuation coefficient of the photosynthetically available radiation Kd(PAR) for global open ocean and coastal waters. Remote Sensing of Environment, 159, 250–258.
 Information: Looks at how much light is penetrating the ocean is useful for looking at kelp and chloropyll as they are dependent on light distribution. Higher KdPAR means less light penetrating
+
+---
+### Bathymetrics
+name: Bathymetrics 
+Source: DEM_mosaics/DEM_global_mosaic (ImageServer)
+download: https://gis.ngdc.noaa.gov/arcgis/rest/services/DEM_mosaics/DEM_global_mosaic/ImageServer/exportImage
+parameters: 
+- bounding box:	-120.52,33.69,-118.89,34.51
+- size: 6000, 3018
+- format: tiff
+- pixel type: F32
+- interpolation: PSP_bilinearInterpolation
+Accessed: 2026-10-10
+Notes: Need to rasterio package to be able to read it.
