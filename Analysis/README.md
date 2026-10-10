@@ -2,7 +2,7 @@ Datasets explained and sources cited:
 
 Coordinates used for erddap datasets: 
 Lat: 33.69 , 34.51
-Longitude: -120.52 , -118.98 
+Longitude: -120.52 , -118.89 
 
 Time used: 
 Start 2018-01-01
