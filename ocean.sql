@@ -1,3 +1,4 @@
+-- formatting is different as I created the views in the duckdb gui and then copied them over to this file.
 CREATE OR REPLACE VIEW chl_dineof AS SELECT CAST("time" AS TIMESTAMP) AS ts, CAST(latitude AS "DOUBLE") AS lat, CAST(longitude AS "DOUBLE") AS lon, CAST(chlor_a AS "DOUBLE") AS chl_filled FROM "datasets/chlorophyll_*_dineof.csv" WHERE (TRY_CAST(latitude AS "DOUBLE") IS NOT NULL);
 
 CREATE OR REPLACE VIEW chl_erd AS SELECT CAST("time" AS TIMESTAMP) AS ts, CAST(latitude AS "DOUBLE") AS lat, CAST(longitude AS "DOUBLE") AS lon, CAST(chla AS "DOUBLE") AS chl_obs FROM "datasets/erd_chlorophyll_*.csv" WHERE (TRY_CAST(latitude AS "DOUBLE") IS NOT NULL);
@@ -14,4 +15,27 @@ CREATE OR REPLACE VIEW rain AS SELECT STATION AS station, "NAME" AS "name", CAST
 
 CREATE OR REPLACE VIEW reef AS SELECT SITE AS site, TRANSECT AS transect, CAST(DATE AS "DATE") AS date, "YEAR" AS "year", "MONTH" AS "month", SCIENTIFIC_NAME AS species, COMMON_NAME AS common_name, "nullif"(DENSITY, -99999) AS density, "nullif"(PERCENT_COVER, -99999) AS percent_cover, "nullif"(WM_GM2, -99999) AS wet_biomass FROM read_csv_auto('datasets/SBS_All_Species_Biomass_at_transect_20260311.csv');
 
-CREATE OR REPLACE VIEW sst AS SELECT CAST("time" AS TIMESTAMP) AS ts, CAST(latitude AS "DOUBLE") AS lat, CAST(longitude AS "DOUBLE") AS lon, CAST(analysed_sst AS "DOUBLE") AS sst_c FROM "datasets/SST_MUR_*.csv" WHERE (TRY_CAST(latitude AS "DOUBLE") IS NOT NULL);
+--CREATE OR REPLACE VIEW sst AS SELECT CAST("time" AS TIMESTAMP) AS ts, CAST(latitude AS "DOUBLE") AS lat, CAST(longitude AS "DOUBLE") AS lon, CAST(analysed_sst AS "DOUBLE") AS sst_c FROM "datasets/SST_MUR_*.csv" WHERE (TRY_CAST(latitude AS "DOUBLE") IS NOT NULL);
+
+-- extented my time period for the sst data to include 2008 -2026 filter for longitude to be less than or equal to -118.98
+CREATE OR REPLACE VIEW sst AS
+SELECT CAST("time" AS TIMESTAMP) AS ts,
+       TRY_CAST(latitude AS DOUBLE) AS lat,
+       TRY_CAST(longitude AS DOUBLE) AS lon,
+       TRY_CAST(analysed_sst AS DOUBLE) AS sst_c
+FROM read_csv_auto('datasets/SST_MUR_*.csv')
+WHERE TRY_CAST(latitude AS DOUBLE) IS NOT NULL
+  AND TRY_CAST(longitude AS DOUBLE) <= -118.98 -- filter for longitude less than or equal to -118.98 instead of -118.89 that I originally had
+  AND TRY_CAST(analysed_sst AS DOUBLE) IS NOT NULL
+  AND NOT isnan(TRY_CAST(analysed_sst AS DOUBLE));
+
+--- add the kdpar datasets 
+CREATE OR REPLACE VIEW photo AS
+SELECT CAST("time" AS TIMESTAMP) AS ts,
+       TRY_CAST(latitude AS DOUBLE) AS lat,
+       TRY_CAST(longitude AS DOUBLE) AS lon,
+       TRY_CAST(kd_par AS DOUBLE) AS kdpar
+FROM read_csv_auto('datasets/photo_*.csv')
+WHERE TRY_CAST(latitude AS DOUBLE) IS NOT NULL
+  AND TRY_CAST(kd_par AS DOUBLE) IS NOT NULL
+  AND NOT isnan(TRY_CAST(kd_par AS DOUBLE));
