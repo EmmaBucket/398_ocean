@@ -25,9 +25,10 @@ SELECT CAST("time" AS TIMESTAMP) AS ts,
        TRY_CAST(analysed_sst AS DOUBLE) AS sst_c
 FROM read_csv_auto('datasets/SST_MUR_*.csv')
 WHERE TRY_CAST(latitude AS DOUBLE) IS NOT NULL
-  AND TRY_CAST(longitude AS DOUBLE) <= -118.98 -- filter for longitude less than or equal to -118.98 instead of -118.89 that I originally had
+  AND TRY_CAST(longitude AS DOUBLE) <= -118.98
   AND TRY_CAST(analysed_sst AS DOUBLE) IS NOT NULL
-  AND NOT isnan(TRY_CAST(analysed_sst AS DOUBLE));
+  AND NOT isnan(TRY_CAST(analysed_sst AS DOUBLE))
+  AND TRY_CAST(mask AS INTEGER) = 1;
 
 --- add the kdpar datasets 
 CREATE OR REPLACE VIEW photo AS
@@ -39,3 +40,57 @@ FROM read_csv_auto('datasets/photo_*.csv')
 WHERE TRY_CAST(latitude AS DOUBLE) IS NOT NULL
   AND TRY_CAST(kd_par AS DOUBLE) IS NOT NULL
   AND NOT isnan(TRY_CAST(kd_par AS DOUBLE));
+
+  -- Running new queries to create the tables so that I don't need to query the views every time I want to use them. This will speed up the queries and make it easier to work with the data.
+
+-- 1. Climatology: normal SST for each pixel and calendar month.
+--    Baseline = 2008–2013 (before the 2014–16 heatwave).
+CREATE OR REPLACE TABLE sst_clim_pre AS
+SELECT lat,
+       lon,
+       month(ts)  AS month_num,
+       avg(sst_c) AS clim_sst
+FROM sst
+WHERE ts >= '2008-01-01' AND ts < '2014-01-01'
+GROUP BY lat, lon, month(ts);
+
+-- post heatwave climatology
+CREATE OR REPLACE TABLE sst_clim_post AS
+SELECT lat,
+       lon,
+       month(ts)  AS month_num,
+       avg(sst_c) AS clim_sst
+FROM sst
+WHERE ts >= '2017-01-01' AND ts < '2026-01-01'
+GROUP BY lat, lon, month(ts);
+
+-- 2. Monthly series: mean SST for each pixel in each month of each year.
+CREATE OR REPLACE TABLE sst_monthly AS
+SELECT lat,
+       lon,
+       date_trunc('month', ts) AS monthly_date,
+       avg(sst_c) AS mean_sst_c
+FROM sst
+GROUP BY lat, lon, date_trunc('month', ts);
+
+-- 3. Anomaly: how far each month was from normal for that pixel and month.
+CREATE OR REPLACE VIEW sst_anomaly AS
+SELECT m.lat,
+       m.lon,
+       m.monthly_date,
+       m.mean_sst_c,
+       c_pre.clim_sst,
+       m.mean_sst_c - c_pre.clim_sst AS anomaly_c_pre,
+       m.mean_sst_c - c_post.clim_sst AS anomaly_c_post
+FROM sst_monthly AS m
+JOIN sst_clim_pre AS c_pre
+  ON  m.lat = c_pre.lat
+  AND m.lon = c_pre.lon
+  AND month(m.monthly_date) = c_pre.month_num
+JOIN sst_clim_post AS c_post
+  ON  m.lat = c_post.lat
+  AND m.lon = c_post.lon
+  AND month(m.monthly_date) = c_post.month_num;
+
+  
+  -- next will be working on the photosysthesis data 
