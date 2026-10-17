@@ -93,4 +93,78 @@ JOIN sst_clim_post AS c_post
   AND month(m.monthly_date) = c_post.month_num;
 
   
-  -- next will be working on the photosysthesis data 
+  
+-- next will be working on the kelp
+
+
+-- creating monthly averages
+CREATE OR REPLACE TABLE kelp_quarter AS
+SELECT lat,
+       lon,
+       date_trunc('quarter', date) AS quarterly_kelp,
+       avg(biomass_kg) AS mean_biomass_kg,
+       avg(area_m2) AS mean_area_m2
+FROM kelp
+WHERE date >= '2008-01-01' AND date < '2026-05-01'
+GROUP BY lat, lon, date_trunc('quarter', date);
+
+-- look for anaomalies in kelp biomass and area
+CREATE OR REPLACE VIEW kelp_anomaly AS
+SELECT lat,
+       lon,
+        quarterly_kelp,
+        mean_biomass_kg,
+        mean_area_m2,
+        avg(mean_biomass_kg) OVER (PARTITION BY lat, lon, quarter(quarterly_kelp)) AS clim_biomass_kg,
+        avg(mean_area_m2) OVER (PARTITION BY lat, lon, quarter(quarterly_kelp)) AS clim_area_m2,
+        mean_biomass_kg - avg(mean_biomass_kg) OVER (PARTITION BY lat, lon, quarter(quarterly_kelp)) AS anomaly_biomass_kg,
+        mean_area_m2 - avg(mean_area_m2) OVER (PARTITION BY lat, lon, quarter(quarterly_kelp)) AS anomaly_area_m2
+FROM kelp_quarter;
+
+
+-- Reef dataset
+-- looking for the names of the species that have kelp in their common name and then calculating the mean density for those species.
+SELECT species, 
+common_name,
+ avg(density) AS mean_density
+FROM reef
+WHERE common_name ILIKE '%kelp%'
+GROUP BY species, common_name;
+
+-- creating a table for the species that have kelp or urchin in their common name and then calculating the mean density for those species.
+-- species with kelp or urchin in their common name: mean density per species per year
+CREATE OR REPLACE VIEW reef_species AS
+SELECT 
+     species, 
+     common_name, 
+     site,
+     year,
+     avg(density) AS mean_density
+FROM reef
+WHERE common_name ILIKE '%kelp%' OR common_name ILIKE '%urchin%'
+GROUP BY species, common_name, site, year;
+
+-- side-by-side comparison: one row per year, one column per species
+CREATE OR REPLACE VIEW species_ind AS 
+SELECT 
+    year, 
+    month,
+    site,
+    avg(CASE WHEN species = 'Macrocystis pyrifera' THEN density END) AS giant_kelp_density,
+    avg(CASE WHEN species = 'Egregia menziesii' THEN density END) AS feather_kelp_density,
+    avg(CASE WHEN species = 'Pterygophora californica' THEN density END) AS palm_kelp_density,
+    avg(CASE WHEN species = 'Strongylocentrotus purpuratus' THEN density END) AS purple_urchin_density,
+    avg(CASE WHEN species = 'Mesocentrotus franciscanus' THEN density END) AS red_urchin_density
+FROM reef
+GROUP BY year, month, site
+ORDER BY year, month, site;
+
+-- reef site coordinates, from knb-lter-sbc.182 metadata
+CREATE OR REPLACE TABLE reef_sites AS
+SELECT * FROM (VALUES
+    ('AQUE', 'Arroyo Quemado', 34.46775, -120.11905),
+    ('NAPL', 'Naples',         34.42212, -119.95154),
+    ('IVEE', 'Isla Vista',     34.40278, -119.85755),
+    ('MOHK', 'Mohawk',         34.39407, -119.72957),
+    ('CARP', 'Carpinteria',    34.39163, -119.54169)
+) AS t(site, site_name, lat, lon);
