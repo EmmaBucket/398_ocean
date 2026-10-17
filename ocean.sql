@@ -168,3 +168,19 @@ SELECT * FROM (VALUES
     ('MOHK', 'Mohawk',         34.39407, -119.72957),
     ('CARP', 'Carpinteria',    34.39163, -119.54169)
 ) AS t(site, site_name, lat, lon);
+
+CREATE OR REPLACE VIEW reef_species_sites AS
+SELECT 
+    r.site,
+    s.site_name, 
+    r.year, 
+    r.month,
+    avg(CASE WHEN r.species = 'Macrocystis pyrifera' THEN r.density END) AS giant_kelp_density,
+    avg(CASE WHEN r.species = 'Egregia menziesii' THEN r.density END) AS feather_kelp_density,
+    avg(CASE WHEN r.species = 'Pterygophora californica' THEN r.density END) AS palm_kelp_density,
+    avg(CASE WHEN r.species = 'Strongylocentrotus purpuratus' THEN r.density END) AS purple_urchin_density,
+    avg(CASE WHEN r.species = 'Mesocentrotus franciscanus' THEN r.density END) AS red_urchin_density
+FROM reef AS r
+JOIN reef_sites AS s ON r.site = s.site
+GROUP BY r.site, s.site_name, r.year, r.month
+ORDER BY r.site, r.year, r.month;
