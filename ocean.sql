@@ -32,7 +32,7 @@ WHERE TRY_CAST(latitude AS DOUBLE) IS NOT NULL
 
 --- add the kdpar datasets 
 CREATE OR REPLACE VIEW photo AS
-SELECT CAST("time" AS TIMESTAMP) AS ts,
+SELECT DISTINCT CAST("time" AS TIMESTAMP) AS ts, -- added distinct to get rid of duplicates
        TRY_CAST(latitude AS DOUBLE) AS lat,
        TRY_CAST(longitude AS DOUBLE) AS lon,
        TRY_CAST(kd_par AS DOUBLE) AS kdpar
@@ -184,3 +184,37 @@ FROM reef AS r
 JOIN reef_sites AS s ON r.site = s.site
 GROUP BY r.site, s.site_name, r.year, r.month
 ORDER BY r.site, r.year, r.month;
+
+
+--- photo
+
+CREATE OR REPLACE TABLE kdpar_averages AS
+SELECT 
+    lat, 
+    lon, 
+    month(ts) as month_num,
+    avg(kdpar) as average_kdpar,
+    COUNT(*) AS n_observations, 
+    9 - count(*) AS cloudy_months -- 9 years observed from 2017-2025
+FROM photo
+WHERE ts >= '2017-01-01' AND ts < '2026-01-01'
+GROUP BY lat, lon, month(ts); 
+
+-- same layout as the sst column 
+
+CREATE OR REPLACE TABLE kdpar_changes AS 
+SELECT 
+    p.ts, 
+    p.lat, 
+    p.lon,
+    p.kdpar, 
+    a.average_kdpar,
+    p.kdpar - a.average_kdpar AS changes_in_average_kdpar
+FROM photo AS p
+JOIN kdpar_averages AS a
+  ON  p.lat = a.lat
+  AND p.lon = a.lon
+  AND month(p.ts) = a.month_num;
+
+
+   
