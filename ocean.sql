@@ -25,13 +25,14 @@ SELECT CAST("time" AS TIMESTAMP) AS ts,
        TRY_CAST(analysed_sst AS DOUBLE) AS sst_c
 FROM read_csv_auto('datasets/SST_MUR_*.csv')
 WHERE TRY_CAST(latitude AS DOUBLE) IS NOT NULL
-  AND TRY_CAST(longitude AS DOUBLE) <= -118.98 -- filter for longitude less than or equal to -118.98 instead of -118.89 that I originally had
+  AND TRY_CAST(longitude AS DOUBLE) <= -118.98
   AND TRY_CAST(analysed_sst AS DOUBLE) IS NOT NULL
-  AND NOT isnan(TRY_CAST(analysed_sst AS DOUBLE));
+  AND NOT isnan(TRY_CAST(analysed_sst AS DOUBLE))
+  AND TRY_CAST(mask AS INTEGER) = 1;
 
 --- add the kdpar datasets 
 CREATE OR REPLACE VIEW photo AS
-SELECT CAST("time" AS TIMESTAMP) AS ts,
+SELECT DISTINCT CAST("time" AS TIMESTAMP) AS ts, -- added distinct to get rid of duplicates
        TRY_CAST(latitude AS DOUBLE) AS lat,
        TRY_CAST(longitude AS DOUBLE) AS lon,
        TRY_CAST(kd_par AS DOUBLE) AS kdpar
@@ -39,3 +40,181 @@ FROM read_csv_auto('datasets/photo_*.csv')
 WHERE TRY_CAST(latitude AS DOUBLE) IS NOT NULL
   AND TRY_CAST(kd_par AS DOUBLE) IS NOT NULL
   AND NOT isnan(TRY_CAST(kd_par AS DOUBLE));
+
+  -- Running new queries to create the tables so that I don't need to query the views every time I want to use them. This will speed up the queries and make it easier to work with the data.
+
+-- 1. Climatology: normal SST for each pixel and calendar month.
+--    Baseline = 2008–2013 (before the 2014–16 heatwave).
+CREATE OR REPLACE TABLE sst_clim_pre AS
+SELECT lat,
+       lon,
+       month(ts)  AS month_num,
+       avg(sst_c) AS clim_sst
+FROM sst
+WHERE ts >= '2008-01-01' AND ts < '2014-01-01'
+GROUP BY lat, lon, month(ts);
+
+-- post heatwave climatology
+CREATE OR REPLACE TABLE sst_clim_post AS
+SELECT lat,
+       lon,
+       month(ts)  AS month_num,
+       avg(sst_c) AS clim_sst
+FROM sst
+WHERE ts >= '2017-01-01' AND ts < '2026-01-01'
+GROUP BY lat, lon, month(ts);
+
+-- 2. Monthly series: mean SST for each pixel in each month of each year.
+CREATE OR REPLACE TABLE sst_monthly AS
+SELECT lat,
+       lon,
+       date_trunc('month', ts) AS monthly_date,
+       avg(sst_c) AS mean_sst_c
+FROM sst
+GROUP BY lat, lon, date_trunc('month', ts);
+
+-- 3. Anomaly: how far each month was from normal for that pixel and month.
+CREATE OR REPLACE VIEW sst_anomaly AS
+SELECT m.lat,
+       m.lon,
+       m.monthly_date,
+       m.mean_sst_c,
+       c_pre.clim_sst,
+       m.mean_sst_c - c_pre.clim_sst AS anomaly_c_pre,
+       m.mean_sst_c - c_post.clim_sst AS anomaly_c_post
+FROM sst_monthly AS m
+JOIN sst_clim_pre AS c_pre
+  ON  m.lat = c_pre.lat
+  AND m.lon = c_pre.lon
+  AND month(m.monthly_date) = c_pre.month_num
+JOIN sst_clim_post AS c_post
+  ON  m.lat = c_post.lat
+  AND m.lon = c_post.lon
+  AND month(m.monthly_date) = c_post.month_num;
+
+  
+  
+-- next will be working on the kelp
+
+
+-- creating monthly averages
+CREATE OR REPLACE TABLE kelp_quarter AS
+SELECT lat,
+       lon,
+       date_trunc('quarter', date) AS quarterly_kelp,
+       avg(biomass_kg) AS mean_biomass_kg,
+       avg(area_m2) AS mean_area_m2
+FROM kelp
+WHERE date >= '2008-01-01' AND date < '2026-05-01'
+GROUP BY lat, lon, date_trunc('quarter', date);
+
+-- look for anaomalies in kelp biomass and area
+CREATE OR REPLACE VIEW kelp_anomaly AS
+SELECT lat,
+       lon,
+        quarterly_kelp,
+        mean_biomass_kg,
+        mean_area_m2,
+        avg(mean_biomass_kg) OVER (PARTITION BY lat, lon, quarter(quarterly_kelp)) AS clim_biomass_kg,
+        avg(mean_area_m2) OVER (PARTITION BY lat, lon, quarter(quarterly_kelp)) AS clim_area_m2,
+        mean_biomass_kg - avg(mean_biomass_kg) OVER (PARTITION BY lat, lon, quarter(quarterly_kelp)) AS anomaly_biomass_kg,
+        mean_area_m2 - avg(mean_area_m2) OVER (PARTITION BY lat, lon, quarter(quarterly_kelp)) AS anomaly_area_m2
+FROM kelp_quarter;
+
+
+-- Reef dataset
+-- looking for the names of the species that have kelp in their common name and then calculating the mean density for those species.
+SELECT species, 
+common_name,
+ avg(density) AS mean_density
+FROM reef
+WHERE common_name ILIKE '%kelp%'
+GROUP BY species, common_name;
+
+-- creating a table for the species that have kelp or urchin in their common name and then calculating the mean density for those species.
+-- species with kelp or urchin in their common name: mean density per species per year
+CREATE OR REPLACE VIEW reef_species AS
+SELECT 
+     species, 
+     common_name, 
+     site,
+     year,
+     avg(density) AS mean_density
+FROM reef
+WHERE common_name ILIKE '%kelp%' OR common_name ILIKE '%urchin%'
+GROUP BY species, common_name, site, year;
+
+-- side-by-side comparison: one row per year, one column per species
+CREATE OR REPLACE VIEW species_ind AS 
+SELECT 
+    year, 
+    month,
+    site,
+    avg(CASE WHEN species = 'Macrocystis pyrifera' THEN density END) AS giant_kelp_density,
+    avg(CASE WHEN species = 'Egregia menziesii' THEN density END) AS feather_kelp_density,
+    avg(CASE WHEN species = 'Pterygophora californica' THEN density END) AS palm_kelp_density,
+    avg(CASE WHEN species = 'Strongylocentrotus purpuratus' THEN density END) AS purple_urchin_density,
+    avg(CASE WHEN species = 'Mesocentrotus franciscanus' THEN density END) AS red_urchin_density
+FROM reef
+GROUP BY year, month, site
+ORDER BY year, month, site;
+
+-- reef site coordinates, from knb-lter-sbc.182 metadata
+CREATE OR REPLACE TABLE reef_sites AS
+SELECT * FROM (VALUES
+    ('AQUE', 'Arroyo Quemado', 34.46775, -120.11905),
+    ('NAPL', 'Naples',         34.42212, -119.95154),
+    ('IVEE', 'Isla Vista',     34.40278, -119.85755),
+    ('MOHK', 'Mohawk',         34.39407, -119.72957),
+    ('CARP', 'Carpinteria',    34.39163, -119.54169)
+) AS t(site, site_name, lat, lon);
+
+CREATE OR REPLACE VIEW reef_species_sites AS
+SELECT 
+    r.site,
+    s.site_name, 
+    r.year, 
+    r.month,
+    avg(CASE WHEN r.species = 'Macrocystis pyrifera' THEN r.density END) AS giant_kelp_density,
+    avg(CASE WHEN r.species = 'Egregia menziesii' THEN r.density END) AS feather_kelp_density,
+    avg(CASE WHEN r.species = 'Pterygophora californica' THEN r.density END) AS palm_kelp_density,
+    avg(CASE WHEN r.species = 'Strongylocentrotus purpuratus' THEN r.density END) AS purple_urchin_density,
+    avg(CASE WHEN r.species = 'Mesocentrotus franciscanus' THEN r.density END) AS red_urchin_density
+FROM reef AS r
+JOIN reef_sites AS s ON r.site = s.site
+GROUP BY r.site, s.site_name, r.year, r.month
+ORDER BY r.site, r.year, r.month;
+
+
+--- photo
+
+CREATE OR REPLACE TABLE kdpar_averages AS
+SELECT 
+    lat, 
+    lon, 
+    month(ts) as month_num,
+    avg(kdpar) as average_kdpar,
+    COUNT(*) AS n_observations, 
+    9 - count(*) AS cloudy_months -- 9 years observed from 2017-2025
+FROM photo
+WHERE ts >= '2017-01-01' AND ts < '2026-01-01'
+GROUP BY lat, lon, month(ts); 
+
+-- same layout as the sst column 
+
+CREATE OR REPLACE TABLE kdpar_changes AS 
+SELECT 
+    p.ts, 
+    p.lat, 
+    p.lon,
+    p.kdpar, 
+    a.average_kdpar,
+    p.kdpar - a.average_kdpar AS changes_in_average_kdpar
+FROM photo AS p
+JOIN kdpar_averages AS a
+  ON  p.lat = a.lat
+  AND p.lon = a.lon
+  AND month(p.ts) = a.month_num;
+
+
+   
