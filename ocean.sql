@@ -198,7 +198,8 @@ SELECT
     9 - count(*) AS cloudy_months -- 9 years observed from 2017-2025
 FROM photo
 WHERE ts >= '2017-01-01' AND ts < '2026-01-01'
-GROUP BY lat, lon, month(ts); 
+GROUP BY lat, lon, month(ts)
+ORDER BY lat, lon, month(ts); 
 
 -- same layout as the sst column 
 
@@ -214,7 +215,8 @@ FROM photo AS p
 JOIN kdpar_averages AS a
   ON  p.lat = a.lat
   AND p.lon = a.lon
-  AND month(p.ts) = a.month_num;
+  AND month(p.ts) = a.month_num
+Order BY p.ts, p.lat, p.lon;
 
 ---CUTI 
 CREATE OR REPLACE TABLE cuti_average AS
@@ -223,7 +225,8 @@ SELECT
    lat,
    avg(cuti) AS average_upwell
 FROM CUTI
-GROUP BY lat, month_ts;
+GROUP BY lat, month_ts
+ORDER BY Lat, month_ts;
 
 --pdo
 CREATE OR REPLACE TABLE pdo_phase AS
@@ -231,7 +234,8 @@ SELECT
     date,
     pdo,
     CASE WHEN pdo > 0 THEN 'warm' ELSE 'cool' END AS pdo_phase
-FROM pdo;
+FROM pdo
+Order By date;
 
 
 CREATE OR REPLACE TABLE pdo_quarter AS
@@ -239,7 +243,8 @@ SELECT
        date_trunc('quarter', date) AS quarterly_pdo,
        avg(pdo) AS mean_pdo,
 FROM pdo
-GROUP BY  date_trunc('quarter', date);
+GROUP BY  date_trunc('quarter', date)
+ORDER BY quarterly_pdo;
 
 
     
@@ -252,7 +257,8 @@ SELECT
     avg(prcp) AS mean_daily_rain_mm,
     count(DISTINCT station) AS n_stations
 FROM rain
-GROUP BY region, date_trunc('quarter', date);
+GROUP BY region, date_trunc('quarter', date)
+ORDER BY region, quarter;
 
 CREATE OR REPLACE TABLE rain_lag AS
 SELECT 
@@ -280,5 +286,6 @@ SELECT
   avg(salinity) AS avg_sal,
   avg(doxy) AS avg_doxy
 FROM Glider
-GROUP BY depth, date_trunc('month', ts);
+GROUP BY depth, date_trunc('month', ts)
+ORDER BY depth, month;
   
