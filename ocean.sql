@@ -267,3 +267,18 @@ SELECT
     ) AS rain_7day
 FROM rain
 ORDER BY date; 
+ 
+
+ -- Glider
+-- try and see how glider affects 
+
+CREATE OR REPLACE TABLE glider_average AS
+SELECT 
+  depth,
+  date_trunc('month', ts) AS month,
+  avg(temperature) AS avg_temp,
+  avg(salinity) AS avg_sal,
+  avg(doxy) AS avg_doxy
+FROM Glider
+GROUP BY depth, date_trunc('month', ts);
+  
