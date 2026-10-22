@@ -216,5 +216,54 @@ JOIN kdpar_averages AS a
   AND p.lon = a.lon
   AND month(p.ts) = a.month_num;
 
+---CUTI 
+CREATE OR REPLACE TABLE cuti_average AS
+SELECT
+  month(ts) AS month_ts,
+   lat,
+   avg(cuti) AS average_upwell
+FROM CUTI
+GROUP BY lat, month_ts;
 
-   
+--pdo
+CREATE OR REPLACE TABLE pdo_phase AS
+SELECT
+    date,
+    pdo,
+    CASE WHEN pdo > 0 THEN 'warm' ELSE 'cool' END AS pdo_phase
+FROM pdo;
+
+
+CREATE OR REPLACE TABLE pdo_quarter AS
+SELECT
+       date_trunc('quarter', date) AS quarterly_pdo,
+       avg(pdo) AS mean_pdo,
+FROM pdo
+GROUP BY  date_trunc('quarter', date);
+
+
+    
+-- rain 
+
+CREATE OR REPLACE TABLE rain_quarter AS
+SELECT
+    region,
+    date_trunc('quarter', date) AS quarter,
+    avg(prcp) AS mean_daily_rain_mm,
+    count(DISTINCT station) AS n_stations
+FROM rain
+GROUP BY region, date_trunc('quarter', date);
+
+CREATE OR REPLACE TABLE rain_lag AS
+SELECT 
+    region, 
+    station,
+    date, 
+    prcp,
+    SUM(prcp) OVER (
+      PARTITION BY station
+      ORDER BY date
+      RANGE BETWEEN INTERVAL 6 DAYS PRECEDING AND CURRENT ROW
+    ) AS rain_7day
+FROM rain
+ORDER BY date; 
