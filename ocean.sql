@@ -1,7 +1,7 @@
 -- formatting is different as I created the views in the duckdb gui and then copied them over to this file.
-CREATE OR REPLACE VIEW chl_dineof AS SELECT CAST("time" AS TIMESTAMP) AS ts, CAST(latitude AS "DOUBLE") AS lat, CAST(longitude AS "DOUBLE") AS lon, CAST(chlor_a AS "DOUBLE") AS chl_filled FROM "datasets/chlorophyll_*_dineof.csv" WHERE TRY_CAST(latitude AS DOUBLE) IS NOT NULL AND TRY_CAST(chla AS DOUBLE) IS NOT NULL AND NOT isnan(TRY_CAST(chla AS DOUBLE));
+CREATE OR REPLACE VIEW chl_dineof AS SELECT CAST("time" AS TIMESTAMP) AS ts, CAST(latitude AS "DOUBLE") AS lat, CAST(longitude AS "DOUBLE") AS lon, CAST(chlor_a AS "DOUBLE") AS chl_filled FROM "datasets/chlorophyll_*_dineof.csv" WHERE TRY_CAST(latitude AS DOUBLE) IS NOT NULL AND TRY_CAST(chlor_a AS DOUBLE) IS NOT NULL AND NOT isnan(TRY_CAST(chlor_a AS DOUBLE));
 
-CREATE OR REPLACE VIEW chl_erd AS SELECT CAST("time" AS TIMESTAMP) AS ts, CAST(latitude AS "DOUBLE") AS lat, CAST(longitude AS "DOUBLE") AS lon, CAST(chla AS "DOUBLE") AS chl_obs FROM "datasets/erd_chlorophyll_*.csv" WHERE TRY_CAST(latitude AS DOUBLE) IS NOT NULL AND TRY_CAST(chlor_a AS DOUBLE) IS NOT NULL AND NOT isnan(TRY_CAST(chlor_a AS DOUBLE));
+CREATE OR REPLACE VIEW chl_erd AS SELECT CAST("time" AS TIMESTAMP) AS ts, CAST(latitude AS "DOUBLE") AS lat, CAST(longitude AS "DOUBLE") AS lon, CAST(chla AS "DOUBLE") AS chl_obs FROM "datasets/erd_chlorophyll_*.csv" WHERE TRY_CAST(latitude AS DOUBLE) IS NOT NULL AND TRY_CAST(chla AS DOUBLE) IS NOT NULL AND NOT isnan(TRY_CAST(chla AS DOUBLE));
 CREATE OR REPLACE VIEW cuti AS SELECT DISTINCT CAST("time" AS TIMESTAMP) AS ts, CAST(latitude AS DOUBLE) AS lat, CAST(CUTI AS DOUBLE) AS cuti FROM "datasets/erdCUTIdaily_*.csv" WHERE (TRY_CAST(latitude AS DOUBLE) IS NOT NULL);
 
 CREATE OR REPLACE VIEW glider AS SELECT CAST(mission AS INTEGER) AS mission, CAST("time" AS TIMESTAMP) AS ts, CAST(latitude AS "DOUBLE") AS lat, CAST(longitude AS "DOUBLE") AS lon, CAST(depth AS "DOUBLE") AS depth, CASE  WHEN ((doxy = 'NaN')) THEN (NULL) ELSE TRY_CAST(doxy AS "DOUBLE") END AS doxy, CASE  WHEN ((temperature = 'NaN')) THEN (NULL) ELSE TRY_CAST(temperature AS "DOUBLE") END AS temperature, CASE  WHEN ((salinity = 'NaN')) THEN (NULL) ELSE TRY_CAST(salinity AS "DOUBLE") END AS salinity, CASE  WHEN ((chlorophyll = 'NaN')) THEN (NULL) ELSE TRY_CAST(chlorophyll AS "DOUBLE") END AS chl_glider FROM read_csv_auto('datasets/binnedCUGN80_52e6_d0ac_a341.csv', (all_varchar = CAST('t' AS BOOLEAN))) WHERE (TRY_CAST(latitude AS "DOUBLE") IS NOT NULL);
@@ -116,7 +116,7 @@ CREATE OR REPLACE TABLE kelp_pre AS
        avg(area_m2) AS mean_area_m2
 FROM kelp
 WHERE date >= '2008-01-01' AND date < '2014-01-01'
-GROUP BY lat, lon, month(ts);
+GROUP BY lat, lon, quarter(date);
 
 
 
@@ -308,7 +308,7 @@ ORDER BY depth, month;
   
 
 -- Create table to run queries on for model this is for kelp
--- needs SST, PDO, CUTI, and Kdpar
+-- needs SST, PDO, CUTI, 
 
 CREATE OR REPLACE TABLE model_long AS
 WITH kelp_q AS (
@@ -346,4 +346,48 @@ JOIN pdo_q AS p ON k.quarter = p.quarter
 JOIN cuti_q AS c ON k.quarter = c.quarter
 ORDER BY k.quarter;
 
--- Because kelp is quarterly it isn't returning too many variables to run a model on 
+-- building one that also includes light attenuation (kdpar) which would give less quarterly data but more accurate for the model.
+
+CREATE OR REPLACE TABLE light_model AS
+WITH kelp_q AS (
+    SELECT quarterly_kelp AS quarter,
+           avg(mean_biomass_kg) AS kelp_biomass
+    FROM kelp_quarter
+    GROUP BY quarterly_kelp
+),
+sst_q AS (
+    SELECT date_trunc('quarter', monthly_date) AS quarter,
+           avg(mean_sst_c) AS avg_sst
+    FROM sst_monthly
+    GROUP BY 1
+),
+pdo_q AS (
+    SELECT date_trunc('quarter', date) AS quarter,
+           avg(pdo) AS avg_pdo
+    FROM pdo
+    GROUP BY 1
+),
+cuti_q AS (
+    SELECT date_trunc('quarter', ts) AS quarter,
+           avg(cuti) AS avg_cuti
+    FROM cuti
+    GROUP BY 1
+), 
+kdpar_q AS (
+    SELECT date_trunc('quarter', ts) AS quarter,
+           avg(kdpar) AS avg_kdpar
+    FROM photo
+    GROUP BY 1
+)
+SELECT k.quarter,
+       k.kelp_biomass,
+       s.avg_sst,
+       p.avg_pdo,
+       c.avg_cuti,
+       kd.avg_kdpar
+FROM kelp_q AS k
+JOIN sst_q AS s ON k.quarter = s.quarter
+JOIN pdo_q AS p ON k.quarter = p.quarter
+JOIN cuti_q AS c ON k.quarter = c.quarter
+JOIN kdpar_q AS kd ON k.quarter = kd.quarter
+ORDER BY k.quarter;
