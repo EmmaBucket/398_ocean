@@ -391,3 +391,138 @@ JOIN pdo_q AS p ON k.quarter = p.quarter
 JOIN cuti_q AS c ON k.quarter = c.quarter
 JOIN kdpar_q AS kd ON k.quarter = kd.quarter
 ORDER BY k.quarter;
+
+
+--- CHLOROPHYLL model to include SST, CUTI, RAIN -- DAILY 
+
+CREATE OR REPLACE TABLE chl_pixel_clim AS
+SELECT
+    lat,
+    lon,
+    round(lat, 2) AS lat_round,   
+    round(lon, 2) AS lon_round,
+    round(lat, 0) AS lat_band,    -- this will be needed for the CUTI data which is only available in lat
+    count(*) AS n_obs_chl,
+    avg(ln(chl_obs)) AS log_mean_chl,   -- log scale: many small values, few huge ones
+    exp(avg(ln(chl_obs))) AS geo_mean_chl,   -- back to mg/m3, interpretable
+    stddev_samp(ln(chl_obs)) AS log_sd_chl      -- lets me z-score each pixel against itself
+FROM chl_erd
+WHERE chl_obs > 0
+GROUP BY lat, lon, round(lat, 2), round(lon, 2), round(lat, 0);
+
+-- Fixed pixel -> nearest rain stations. 
+CREATE OR REPLACE TABLE pixel_rain_sites AS
+WITH stations AS (
+    SELECT DISTINCT station, 
+      lat AS st_lat, 
+      lon AS st_lon
+    FROM rain
+), pixels AS (
+    SELECT 
+      DISTINCT lat, 
+      lon
+    FROM chl_erd
+), pairs AS (
+    SELECT p.lat,
+           p.lon,
+           s.station,
+           sqrt( power((p.lat - s.st_lat) * 111.0, 2).   
+               + power((p.lon - s.st_lon) *  92.0, 2) ) AS dist_km
+    FROM pixels AS p
+    CROSS JOIN stations AS s
+), ranked AS (
+    SELECT *,
+           row_number() OVER (PARTITION BY lat, lon ORDER BY dist_km) AS rk
+    FROM pairs
+)
+SELECT lat,
+       lon,
+       station,
+       dist_km,
+       1.0 / (dist_km + 1.0) AS weight   -- +1 avoids divide-by-zero and softens weighting
+FROM ranked
+WHERE rk <= 3;
+
+-- Bloom events
+CREATE OR REPLACE TABLE bloom_events AS
+SELECT
+    c.lat, 
+    c.lon,
+     c.lat_round, 
+     c.lon_round, 
+     c.lat_band,
+     c.n_obs_chl,
+     c.log_mean_chl, 
+     c.geo_mean_chl, 
+     c.log_sd_chl,
+     e.ts AS bloom_date,
+     e.chl_obs AS bloom_chl,
+    (ln(e.chl_obs) - c.log_mean_chl) / c.log_sd_chl AS bloom_z,  -- creates a z-score for each bloom event relative to the pixel's own climatology
+    s.sst_c,
+    cu.cuti,
+    year(e.ts) AS year,
+    month(e.ts)AS month,
+    dayofyear(e.ts) AS doy
+FROM chl_pixel_clim AS c
+JOIN chl_erd AS e
+  ON e.lat = c.lat AND e.lon = c.lon
+LEFT JOIN sst AS s          -- just left join so that when there is no bloom event there isn't missing data
+  ON round(s.lat, 2) = c.lat_round
+ AND round(s.lon, 2) = c.lon_round
+ AND CAST(s.ts AS DATE) = CAST(e.ts AS DATE)
+LEFT JOIN cuti AS cu         -- just left join so that when there is no bloom event there isn't missing data
+  ON cu.lat = c.lat_band    -- for cuti just have the lat band as that is there isn't lon available
+ AND CAST(cu.ts AS DATE) = CAST(e.ts AS DATE)
+WHERE c.n_obs_chl >= 100     
+  AND c.log_sd_chl > 0        
+  AND e.chl_obs > 0           
+  AND e.chl_obs > exp(c.log_mean_chl + 2 * c.log_sd_chl);
+
+-- Local rain at each event
+CREATE OR REPLACE TABLE event_rain AS
+SELECT
+    b.lat,
+    b.lon,
+    b.bloom_date,
+    sum(r.rain_7day * ps.weight) / sum(ps.weight) AS rain_7day_local,
+    min(ps.dist_km)AS nearest_station_km,
+    count(*) AS n_stations
+FROM bloom_events AS b
+JOIN pixel_rain_sites AS ps
+  ON ps.lat = b.lat AND ps.lon = b.lon
+JOIN rain_lag AS r
+  ON r.station = ps.station
+ AND r.date  = CAST(b.bloom_date AS DATE)
+WHERE r.rain_7day IS NOT NULL
+GROUP BY b.lat, b.lon, b.bloom_date;
+
+-- Bloom frequency map. 
+CREATE OR REPLACE TABLE bloom_frequency AS
+SELECT
+    c.lat,
+    c.lon, 
+    c.lat_round, 
+    c.lon_round,
+    c.n_obs_chl,
+    c.geo_mean_chl,
+    c.log_mean_chl,
+    c.log_sd_chl,
+    count(b.bloom_date) AS n_blooms,
+    count(b.bloom_date) / c.n_obs_chl AS bloom_freq_rel,
+    avg(b.bloom_z)AS mean_bloom_z,
+    avg(b.sst_c) AS mean_sst_at_bloom
+FROM chl_pixel_clim AS c
+LEFT JOIN bloom_events AS b
+  ON b.lat = c.lat AND b.lon = c.lon
+WHERE c.n_obs_chl >= 100
+GROUP BY c.lat, c.lon, c.lat_round, c.lon_round,
+         c.n_obs_chl, c.geo_mean_chl, c.log_mean_chl, c.log_sd_chl;
+
+CREATE OR REPLACE TABLE chl_abs_exceed AS
+SELECT lat, lon,
+       count(*) n_obs,
+       count(*) FILTER (WHERE chl_obs > 5.0) AS n_above_5,
+       count(*) FILTER (WHERE chl_obs > 5.0) / count(*) AS frac_above_5
+FROM chl_erd
+WHERE chl_obs > 0
+GROUP BY lat, lon;
