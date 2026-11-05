@@ -96,7 +96,7 @@ JOIN sst_clim_post AS c_post
 -- next will be working on the kelp
 
 
--- creating monthly averages
+-- creating quarterly averages
 CREATE OR REPLACE TABLE kelp_quarter AS
 SELECT lat,
        lon,
@@ -161,7 +161,7 @@ FROM reef
 WHERE common_name ILIKE '%kelp%' OR common_name ILIKE '%urchin%'
 GROUP BY species, common_name, site, year;
 
--- side-by-side comparison: one row per year, one column per species
+-- side-by-side comparison
 CREATE OR REPLACE VIEW species_ind AS 
 SELECT 
     year, 
@@ -333,6 +333,7 @@ cuti_q AS (
     SELECT date_trunc('quarter', ts) AS quarter,
            avg(cuti) AS avg_cuti
     FROM cuti
+    WHERE lat = 34
     GROUP BY 1
 )
 SELECT k.quarter,
@@ -371,6 +372,7 @@ cuti_q AS (
     SELECT date_trunc('quarter', ts) AS quarter,
            avg(cuti) AS avg_cuti
     FROM cuti
+    WHERE lat = 34
     GROUP BY 1
 ), 
 kdpar_q AS (
@@ -426,7 +428,7 @@ WITH stations AS (
     SELECT p.lat,
            p.lon,
            s.station,
-           sqrt( power((p.lat - s.st_lat) * 111.0, 2).   
+           sqrt( power((p.lat - s.st_lat) * 111.0, 2)   
                + power((p.lon - s.st_lon) *  92.0, 2) ) AS dist_km
     FROM pixels AS p
     CROSS JOIN stations AS s
@@ -526,3 +528,24 @@ SELECT lat, lon,
 FROM chl_erd
 WHERE chl_obs > 0
 GROUP BY lat, lon;
+
+-- Chlorophyll model
+CREATE OR REPLACE TABLE chl_model AS
+SELECT
+    b.lat,
+    b.lat_round,
+    b.lon,
+    b.lon_round,
+    b.bloom_date,
+    b.bloom_chl,
+    b.bloom_z,
+    b.sst_c,
+    b.cuti,
+    e.rain_7day_local, 
+    e.nearest_station_km, 
+    b.year, 
+    b.doy
+FROM bloom_events AS b
+JOIN event_rain AS e
+  ON e.lat = b.lat AND e.lon = b.lon AND e.bloom_date = b.bloom_date
+ORDER BY b.bloom_date, b.lat, b.lon;
