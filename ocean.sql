@@ -40,6 +40,28 @@ WHERE TRY_CAST(latitude AS DOUBLE) IS NOT NULL
   AND TRY_CAST(kd_par AS DOUBLE) IS NOT NULL
   AND NOT isnan(TRY_CAST(kd_par AS DOUBLE));
 
+
+-- Add the depth dataset 
+CREATE OR REPLACE VIEW depth AS
+SELECT DISTINCT TRY_CAST(X_coordinate AS DOUBLE) AS lon,
+       TRY_CAST(Y_coordinate AS DOUBLE) AS lat,
+       TRY_CAST(Depth AS DOUBLE) AS depth
+FROM read_csv_auto('datasets/spatial_depth_list.csv')
+WHERE depth < 0; 
+
+-- Add the waves data set
+CREATE OR REPLACE VIEW waves AS
+WITH raw AS (
+    SELECT regexp_split_to_array(trim(line), '\s+') AS p
+    FROM read_csv('datasets/waves/*.txt', delim = '|', header = false,
+                  columns = {'line': 'VARCHAR'})
+    WHERE line NOT LIKE '#%'
+)
+SELECT make_date(p[1]::INT, p[2]::INT, p[3]::INT) AS date,
+       p[9]::DOUBLE AS wave_height_m
+FROM raw
+WHERE p[9]::DOUBLE < 99; 
+
   -- Running new queries to create the tables so that I don't need to query the views every time I want to use them. This will speed up the queries and make it easier to work with the data.
 
 -- 1. Climatology: normal SST for each pixel and calendar month.
@@ -549,3 +571,125 @@ FROM bloom_events AS b
 JOIN event_rain AS e
   ON e.lat = b.lat AND e.lon = b.lon AND e.bloom_date = b.bloom_date
 ORDER BY b.bloom_date, b.lat, b.lon;
+
+
+
+-- Also include a 7 day cuti upwelling index to see if it brought nutrients to the surface to support the bloom.
+CREATE OR REPLACE TABLE cuti_daily AS
+SELECT 
+    lat as lat_band, 
+    CAST(ts AS DATE) as date, 
+    cuti, 
+    avg(cuti) OVER (PARTITION BY lat ORDER BY CAST(ts AS DATE) RANGE BETWEEN interval 7 DAYS PRECEDING  AND INTERVAL 1 DAY PRECEDING) AS cuti_7_days
+FROM cuti
+ORDER BY lat_band, date; 
+
+-- daily chlorophyll model 
+CREATE OR REPLACE TABLE chl_daily_model AS
+WITH chl_pixel AS(
+  SELECT 
+    lat,
+    lon, 
+    ts,
+    round(lat, 2) AS lat_round, 
+    round(lon, 2) AS lon_round, 
+    round(round(lat, 2), 0) AS lat_band,  -- This is for cuti as it is only measured in 33,34,35
+    CAST(ts as DATE) AS date, 
+    COUNT(*) OVER(PARTITION BY lat, lon) AS n_days,
+    ln(chl_obs) as log_chl, 
+    avg(ln(chl_obs)) OVER (PARTITION BY lat, lon) AS log_mean_chl,
+    stddev_samp(ln(chl_obs)) OVER (PARTITION BY lat,lon) as sd_log_chl,
+    chl_obs 
+  FROM chl_erd
+  WHERE chl_obs >0
+),
+sst_daily AS (
+  SELECT 
+    round(lat,2) as lat_round,
+    round(lon, 2) as lon_round, 
+    CAST(ts AS DATE) AS date, 
+    avg(sst_c) AS sst_c
+  FROM sst
+  WHERE ts>= '2018-01-01' -- that is when our erdap database starts
+  GROUP BY round(lat, 2), round(lon, 2), CAST(ts AS DATE)
+), 
+stations AS (
+  SELECT 
+      DISTINCT station, 
+      lat AS st_lat, 
+      lon AS st_lon
+    FROM rain
+    GROUP BY station, lat, lon
+),
+pairs AS(
+  SELECT
+    c.lat_round,
+    c.lon_round,
+    s.station, 
+    sqrt(power ((c.lat_round - s.st_lat)* 111.0,2) + power((c.lon_round - s.st_lon) * 92.0, 2)) AS dist_km
+    FROM (SELECT DISTINCT lat_round, lon_round FROM chl_pixel) AS c
+    CROSS JOIN stations AS s
+), 
+cell_stations AS (
+  SELECT 
+    lat_round, 
+    lon_round, 
+    station, 
+    dist_km,
+    row_number() OVER (PARTITION BY lat_round, lon_round ORDER BY dist_km) AS rk
+  FROM pairs
+  QUALIFY rk <= 3
+), 
+rain_cell_daily AS (
+    SELECT
+    cs.lat_round, 
+    cs.lon_round,
+    r.date,
+   sum(r.prcp / (cs.dist_km + 1.0)) / sum(1 / (cs.dist_km + 1.0)) AS rain_day_mm,
+  sum(r.rain_7day / (cs.dist_km + 1.0)) / sum(1 / (cs.dist_km + 1.0)) AS rain_7day_mm,
+  min(cs.dist_km) AS nearest_station_km,
+  FROM cell_stations AS cs
+  JOIN rain_lag AS r
+    ON r.station = cs.station
+  GROUP BY cs.lat_round, cs.lon_round, r.date
+  ), 
+  kdpar_daily AS (
+    SELECT 
+        round(lat, 2) AS lat_round,
+        round(lon, 2) AS lon_round,
+        CAST(ts AS DATE) AS date,
+        kdpar
+    FROM photo
+    GROUP BY round(lat, 2), round(lon, 2), CAST(ts AS DATE)
+  )
+  SELECT 
+    d.date, 
+    year(d.date) AS year, 
+    month(d.date) AS month, 
+    d.lat,
+    d.lat_round, 
+    d.lon,
+    d.lon_round,
+    d.lat_band, 
+    d.chl_obs,
+    d.log_chl,
+    (d.log_chl - d.log_mean_chl) / d.sd_log_chl AS z_score_chl,
+    s.sst_c,
+    cu.cuti, 
+    cu.cuti_7_days,
+    r.rain_day_mm,
+    r.rain_7day_mm,
+    r.nearest_station_km,
+    k.kdpar
+  FROM chl_pixel AS d
+  LEFT JOIN sst_daily AS s
+  ON s.lat_round = d.lat_round AND s.lon_round = d.lon_round AND s.date = d.date
+LEFT JOIN cuti_daily AS cu
+  ON cu.lat_band = d.lat_band AND cu.date = d.date
+LEFT JOIN rain_cell_daily AS r
+  ON r.lat_round = d.lat_round AND r.lon_round = d.lon_round AND r.date = d.date
+WHERE d.n_days >= 100          
+  AND d.sd_log_chl > 0
+LEFT JOIN kdpar_daily AS k
+  ON k.lat_round = d.lat_round AND k.lon_round = d.lon_round AND k.date = d.date
+ORDER BY d.date, d.lat, d.lon;
