@@ -172,4 +172,13 @@ parameters:
 - pixel type: F32
 - interpolation: PSP_bilinearInterpolation
 Accessed: 2026-10-10
-Notes: Need to rasterio package to be able to read it.
+Notes: Have used rasterio to create a csv file that logs the exact depth based on coordinates, the code used can be found in the plots.ipynb. 
+
+
+### Waves
+name: waves
+Source: NOAA
+Downloaded: https://www.ndbc.noaa.gov/station_page.php?station=46054
+Parameters: Buoy Station 46054 - West Santa Barbara 38 NW West of Santa Barbara
+Accessed: 2026-11-07
+Notes: Models have been over predicting 2022-2025 so looking for other factors that could influence the kelp. 
