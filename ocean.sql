@@ -417,6 +417,104 @@ JOIN kdpar_q AS kd ON k.quarter = kd.quarter
 ORDER BY k.quarter;
 
 
+-- Kelp model with depth and waves
+CREATE OR REPLACE TABLE kelp_cell AS
+WITH depth_grid AS (
+    -- one row per depth grid point
+    SELECT round((lon + 120.91752153744201) / 0.00040424121935056214) AS d_i,
+           round((lat - 33.690202120609676) / 0.00040424121935056214) AS d_j,
+           depth
+    FROM depth
+)
+-- one row per kelp pixel × quarter
+SELECT k.lat,
+       k.lon,
+       ROUND(k.lat, 2) AS lat_round,
+       ROUND(k.lon, 2) AS lon_round,
+        floor(k.lat/0.05) AS lat_band,
+        floor(k.lon/0.05) AS lon_band,
+       d.depth AS elevation_m,
+       date_trunc('quarter', k.date) AS quarter,
+       k.biomass_kg AS kelp_biomass,
+       k.area_m2 AS kelp_area
+FROM kelp AS k
+JOIN depth_grid AS d
+  ON d.d_i = round((k.lon + 120.91752153744201) / 0.00040424121935056214)
+ AND d.d_j = round((k.lat - 33.690202120609676) / 0.00040424121935056214)
+WHERE k.date >= '2008-01-01'; -- Kelp goes back till 1984 
+
+ CREATE OR REPLACE TABLE kelp_waves_depth AS
+  WITH sst_quart AS(
+    SELECT
+    floor(lat/0.05) as lat_band, -- otherwise some of our kelp data doesn't have a corresponding sst data point
+    floor(lon/0.05) as lon_band,
+    date_trunc('quarter', monthly_date) AS quarter,
+    avg(mean_sst_c) AS sst_c, 
+    avg(anomaly_c_pre) AS sst_anom
+  FROM sst_anomaly
+  GROUP BY ALL
+  ),
+   sst_cell AS(
+    SELECT *,
+    LAG(sst_c) OVER (PARTITION BY lat_band, lon_band ORDER BY quarter) AS sst_quarter_lag,
+    LAG(sst_anom) OVER (PARTITION BY lat_band, lon_band ORDER BY quarter) AS sst_anom_quarter_lag
+  FROM sst_quart
+), 
+ cuti_quarter AS (
+    SELECT
+    round(lat) as lat_band, 
+    date_trunc('quarter', ts) as quarter,
+    avg(cuti) as avg_cuti 
+  FROM cuti
+  GROUP BY ALL
+), cuti_lag AS(
+    SELECT *,
+    LAG(avg_cuti) OVER (PARTITION BY lat_band ORDER BY quarter) AS cuti_quarter_average
+  FROM cuti_quarter
+),
+waves_quarter AS ( 
+  SELECT
+    date_trunc('quarter', date) AS quarter, 
+    max(wave_height_m) as max_wave_height_m,
+    avg(wave_height_m) as avg_wave_height_m 
+  FROM waves
+  GROUP BY ALL
+), 
+wave_lag AS(
+  SELECT *,
+    LAG(avg_wave_height_m) OVER (ORDER BY quarter) AS waves_quarter_average, 
+    LAG(max_wave_height_m)OVER (ORDER BY quarter) AS wave_max_lag
+  FROM waves_quarter
+)
+SELECT 
+    k.lat,
+    k.lat_band,
+    k.lon,
+    k.lon_band,
+    k.elevation_m,
+    k.quarter,
+    k.kelp_biomass,
+    k.kelp_area,
+    s.sst_c,
+    s.sst_quarter_lag,
+    s.sst_anom_quarter_lag,
+    c.avg_cuti,
+    c.cuti_quarter_average,
+    w.avg_wave_height_m,
+    w.max_wave_height_m,
+    w.wave_max_lag, 
+    w.waves_quarter_average
+FROM kelp_cell AS k
+LEFT JOIN sst_cell AS s
+    ON k.lat_band = s.lat_band 
+    AND k.lon_band = s.lon_band 
+    AND s.quarter = k.quarter
+LEFT JOIN cuti_lag AS c
+  ON round(round(k.lat, 2), 0) = c.lat_band 
+  AND c.quarter = k.quarter
+LEFT JOIN wave_lag AS w
+  ON w.quarter = k.quarter;
+
 --- CHLOROPHYLL model to include SST, CUTI, RAIN -- DAILY 
 
 CREATE OR REPLACE TABLE chl_pixel_clim AS
@@ -652,15 +750,6 @@ rain_cell_daily AS (
   JOIN rain_lag AS r
     ON r.station = cs.station
   GROUP BY cs.lat_round, cs.lon_round, r.date
-  ), 
-  kdpar_daily AS (
-    SELECT 
-        round(lat, 2) AS lat_round,
-        round(lon, 2) AS lon_round,
-        CAST(ts AS DATE) AS date,
-        kdpar
-    FROM photo
-    GROUP BY round(lat, 2), round(lon, 2), CAST(ts AS DATE)
   )
   SELECT 
     d.date, 
@@ -680,7 +769,7 @@ rain_cell_daily AS (
     r.rain_day_mm,
     r.rain_7day_mm,
     r.nearest_station_km,
-    k.kdpar
+   
   FROM chl_pixel AS d
   LEFT JOIN sst_daily AS s
   ON s.lat_round = d.lat_round AND s.lon_round = d.lon_round AND s.date = d.date
@@ -688,8 +777,5 @@ LEFT JOIN cuti_daily AS cu
   ON cu.lat_band = d.lat_band AND cu.date = d.date
 LEFT JOIN rain_cell_daily AS r
   ON r.lat_round = d.lat_round AND r.lon_round = d.lon_round AND r.date = d.date
-WHERE d.n_days >= 100          
-  AND d.sd_log_chl > 0
-LEFT JOIN kdpar_daily AS k
-  ON k.lat_round = d.lat_round AND k.lon_round = d.lon_round AND k.date = d.date
-ORDER BY d.date, d.lat, d.lon;
+WHERE d.n_days >= 100
+  AND d.sd_log_chl > 0;
