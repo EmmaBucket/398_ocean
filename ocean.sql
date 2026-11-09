@@ -431,14 +431,14 @@ SELECT k.lat,
        k.lon,
        ROUND(k.lat, 2) AS lat_round,
        ROUND(k.lon, 2) AS lon_round,
-        floor(k.lat/0.05) AS lat_band,
-        floor(k.lon/0.05) AS lon_band,
+        floor(k.lat * 20) AS lat_band,
+        floor(k.lon* 20) AS lon_band,
        d.depth AS elevation_m,
        date_trunc('quarter', k.date) AS quarter,
        k.biomass_kg AS kelp_biomass,
        k.area_m2 AS kelp_area
 FROM kelp AS k
-JOIN depth_grid AS d
+LEFT JOIN depth_grid AS d
   ON d.d_i = round((k.lon + 120.91752153744201) / 0.00040424121935056214)
  AND d.d_j = round((k.lat - 33.690202120609676) / 0.00040424121935056214)
 WHERE k.date >= '2008-01-01'; -- Kelp goes back till 1984 
@@ -446,8 +446,8 @@ WHERE k.date >= '2008-01-01'; -- Kelp goes back till 1984
  CREATE OR REPLACE TABLE kelp_waves_depth AS
   WITH sst_quart AS(
     SELECT
-    floor(lat/0.05) as lat_band, -- otherwise some of our kelp data doesn't have a corresponding sst data point
-    floor(lon/0.05) as lon_band,
+    floor(lat * 20) as lat_band, -- otherwise some of our kelp data doesn't have a corresponding sst data point
+    floor(lon * 20) as lon_band,
     date_trunc('quarter', monthly_date) AS quarter,
     avg(mean_sst_c) AS sst_c, 
     avg(anomaly_c_pre) AS sst_anom
@@ -469,7 +469,7 @@ WHERE k.date >= '2008-01-01'; -- Kelp goes back till 1984
   GROUP BY ALL
 ), cuti_lag AS(
     SELECT *,
-    LAG(avg_cuti) OVER (PARTITION BY lat_band ORDER BY quarter) AS cuti_quarter_average
+    LAG(avg_cuti) OVER (PARTITION BY lat_band ORDER BY quarter) AS cuti_quarter_lag
   FROM cuti_quarter
 ),
 waves_quarter AS ( 
@@ -482,9 +482,15 @@ waves_quarter AS (
 ), 
 wave_lag AS(
   SELECT *,
-    LAG(avg_wave_height_m) OVER (ORDER BY quarter) AS waves_quarter_average, 
+    LAG(avg_wave_height_m) OVER (ORDER BY quarter) AS waves_quarter_lag, 
     LAG(max_wave_height_m)OVER (ORDER BY quarter) AS wave_max_lag
   FROM waves_quarter
+), 
+pdo_lag AS (
+  SELECT quarterly_pdo AS quarter,
+         mean_pdo,
+         LAG(mean_pdo) OVER (ORDER BY quarterly_pdo) AS pdo_quarter_lag
+  FROM pdo_quarter
 )
 SELECT 
     k.lat,
@@ -499,11 +505,13 @@ SELECT
     s.sst_quarter_lag,
     s.sst_anom_quarter_lag,
     c.avg_cuti,
-    c.cuti_quarter_average,
+    c.cuti_quarter_lag,
     w.avg_wave_height_m,
     w.max_wave_height_m,
     w.wave_max_lag, 
-    w.waves_quarter_average
+    w.waves_quarter_lag,
+    p.mean_pdo,
+    p.pdo_quarter_lag
 FROM kelp_cell AS k
 LEFT JOIN sst_cell AS s
     ON k.lat_band = s.lat_band 
@@ -513,7 +521,28 @@ LEFT JOIN cuti_lag AS c
   ON round(round(k.lat, 2), 0) = c.lat_band 
   AND c.quarter = k.quarter
 LEFT JOIN wave_lag AS w
-  ON w.quarter = k.quarter;
+  ON w.quarter = k.quarter
+LEFT JOIN pdo_lag AS p
+  ON p.quarter = k.quarter;
+
+-- kelp dataset to account for the high numbers that are resulting in overfitting 
+CREATE OR REPLACE TABLE kelp_hinges AS
+WITH w AS (
+    SELECT date_trunc('quarter', date) AS quarter,
+           max(wave_height_m) AS wave_max
+    FROM waves GROUP BY 1
+)
+SELECT k.quarter,
+    avg(CASE WHEN k.lat <  34.2 THEN k.kelp_biomass END)AS kelp_islands,
+    avg(CASE WHEN k.lat >= 34.2 THEN k.kelp_biomass END)AS kelp_mainland,
+    avg(k.kelp_biomass)AS kelp_pooled,
+    avg(CASE WHEN k.lat <  34.2 THEN k.sst_c END) AS sst_islands,
+    avg(CASE WHEN k.lat >= 34.2 THEN k.sst_c END) AS sst_mainland,
+    any_value(w.wave_max)  AS wave_max,
+    greatest(0, any_value(w.wave_max) - 7.5) AS wave_h
+FROM kelp_waves_depth AS k
+JOIN w ON w.quarter = k.quarter
+GROUP BY k.quarter;
 
 --- CHLOROPHYLL model to include SST, CUTI, RAIN -- DAILY 
 
